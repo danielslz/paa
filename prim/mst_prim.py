@@ -106,7 +106,7 @@ def mst_prim(graph, root_node=1):
     return mst
 
 
-def mst_weigth(mst):
+def mst_weight(mst):
     total = 0
     for u, v, weight in mst.edges.data('weight'):
         total += weight
@@ -121,8 +121,8 @@ our_mst = mst_prim(g, root_node=5)
 lib_mst = nx.minimum_spanning_tree(g, algorithm='prim')
 
 # print result
-print(f'Our MST weigth: {mst_weigth(our_mst)}')
-print(f'Lib MST weigth: {mst_weigth(lib_mst)}')
+print(f'Our MST weight: {mst_weight(our_mst)}')
+print(f'Lib MST weight: {mst_weight(lib_mst)}')
 
 # plot
 plot_graph(g)
