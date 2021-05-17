@@ -1,3 +1,4 @@
+# pip install networkx matplotlib
 import matplotlib.pyplot as plt
 import networkx as nx
 import sys
@@ -7,7 +8,7 @@ from random import randint
 
 
 class Heap():
-    # list of list[node_index, min_weight, parent]
+    # data format: [node_index, min_weight, parent]
     heap = []
 
     def init(self, initial):
@@ -78,7 +79,7 @@ def mst_prim(graph, root_node=1):
     heap = Heap()
     mst = nx.Graph()
 
-    # list of list[min_weight, node_index, parent]
+    # data format: [min_weight, node_index, parent]
     data = []
     for i in range(graph.number_of_nodes()):
         if i+1 == root_node:
@@ -94,7 +95,7 @@ def mst_prim(graph, root_node=1):
             # update neighbors
             if heap.contains(v):
                 item = heap.get(v)
-                if w < item[0]:
+                if w < item[0]:  # weight
                     new_value = [w, v, u]
                     heap.update(v, new_value)
         if parent > 0:
