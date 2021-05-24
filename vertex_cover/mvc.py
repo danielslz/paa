@@ -1,12 +1,11 @@
 # pip install networkx matplotlib jgrapht
+import gc
 import jgrapht
 import matplotlib.pyplot as plt
 import networkx as nx
-import sys
 
 from heapq import heapify, heappop
 from networkx.algorithms.approximation.vertex_cover import min_weighted_vertex_cover
-from random import randint
 from time import time
 
 
@@ -65,13 +64,24 @@ def create_graph_from_file(data_file):
     return G
 
 
+def plot_graph(graph):
+    # pos = nx.spring_layout(graph, k=0.15, iterations=20)
+    pos = nx.circular_layout(graph)
+    edges = graph.edges()
+    # colors = [graph[u][v]['color'] for u,v in edges]
+    nx.draw(graph, pos, with_labels=True)
+    labels = nx.get_edge_attributes(graph, 'weight')
+    nx.draw_networkx_edge_labels(graph, pos, edge_labels=labels)
+    plt.show()
+
+
 def build_heap(graph):
     heap = Heap()
     degree_index = {}
 
     data = []  # data format: [node_degree, node_index]
-    for i in range(graph.number_of_nodes()):
-        node_index = i + 1
+    for node in graph.nodes:
+        node_index = node
         degree = graph.degree[node_index]
         degree_index[node_index] = degree
         # multiply to -1 for desc order
@@ -137,6 +147,37 @@ def minimum_vertex_cover_2(graph):
     return mvc
 
 
+# tip 1: update heap at X loops
+# tip 2: verify if heap implementation is correct
+# tip 3: use heap with dict instead of list
+def minimum_vertex_cover_3(graph):
+    mvc = set()
+    visited = {}
+
+    heap, degrees = build_heap(graph)
+    edges = set(graph.edges)
+
+    for node in graph.nodes:
+        visited[node] = False
+    
+    while(len(edges) > 0):
+        node_degree, node_index = heap.pop()
+        if not visited[node_index]:
+            visited[node_index] = True
+            mvc.add(node_index)
+            # remove edges
+            for u, v in graph.edges([node_index]):
+                # remove edge from list
+                edges.discard((u, v))
+                edges.discard((v, u))
+                # update degree
+                degrees[v] -= 1
+                if degrees[v] == 0:
+                    visited[v] = True
+
+    return mvc
+
+
 def nx_to_jgraph(graph):
     g = jgrapht.create_graph(directed=False, weighted=True, allowing_self_loops=False, allowing_multiple_edges=False)
     g.add_vertices_from(list(graph.nodes))
@@ -145,58 +186,65 @@ def nx_to_jgraph(graph):
 
 
 # build graph
-g = create_graph_from_file('data/as-22july06.graph')
+g = create_graph_from_file('data/star2.graph')
+jg = nx_to_jgraph(g)
 
 print(f'No of nodes in graph: {g.number_of_nodes()}')
 print(f'No of edges in graph: {g.number_of_edges()}')
 print('----')
 
 # calculate mvc
+gc.collect()
 start = time()
 mvc = minimum_vertex_cover(g)
 end = time()
 print(f'Our minimum vertex cover 1: {len(mvc)}, execution time {end-start}s')
 
+gc.collect()
 start = time()
 mvc = minimum_vertex_cover_2(g)
 end = time()
 print(f'Our minimum vertex cover 2: {len(mvc)}, execution time {end-start}s')
 
+gc.collect()
+start = time()
+mvc = minimum_vertex_cover_3(g)
+end = time()
+print(f'Our minimum vertex cover 3: {len(mvc)}, execution time {end-start}s')
 
-# start = time()
-# mvc = minimum_vertex_cover_4(g)
-# end = time()
-# print(f'Our minimum vertex cover 4: {len(mvc)}, execution time {end-start}s')
 print('----')
 
+gc.collect()
 start = time()
 mvc = min_weighted_vertex_cover(g)
 end = time()
 print(f'NetworkX minimum vertex cover: {len(mvc)}, execution time {end-start}s')
 
-
-jg = nx_to_jgraph(g)
-
+gc.collect()
 start = time()
 mvc = jgrapht.algorithms.vertexcover.greedy(jg)
 end = time()
 print(f'Jgrapht greedy minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
 
+gc.collect()
 start = time()
 mvc = jgrapht.algorithms.vertexcover.edgebased(jg)
 end = time()
 print(f'Jgrapht edgebased minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
 
+gc.collect()
 start = time()
 mvc = jgrapht.algorithms.vertexcover.clarkson(jg)
 end = time()
 print(f'Jgrapht clarkson minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
 
+gc.collect()
 start = time()
 mvc = jgrapht.algorithms.vertexcover.baryehuda_even(jg)
 end = time()
 print(f'Jgrapht baryehuda_even minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
 
+# gc.collect()
 # start = time()
 # mvc = jgrapht.algorithms.vertexcover.exact(jg)
 # end = time()
