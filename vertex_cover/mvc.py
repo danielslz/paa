@@ -4,17 +4,22 @@ import jgrapht
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from heapq import heapify, heappop
+from heapq import heapify, heappop, _siftup, _siftdown
 from networkx.algorithms.approximation.vertex_cover import min_weighted_vertex_cover
-from time import time
+from time import perf_counter
+
+from networkx.generators.atlas import graph_atlas_g
 
 
 class Heap():
     # data format: [node_degree, node_index]
     heap = []
+    hash = dict()
 
     def init(self, initial):
         self.heap = initial
+        for value, index in initial:
+            self.hash[index] = value
         self.rebuild()
 
     def rebuild(self):
@@ -22,45 +27,58 @@ class Heap():
 
     def pop(self):
         return heappop(self.heap)
-    
-    def size(self):
-        return len(self.heap)
-    
-    def contains(self, node_index):
-        for e in self.heap:
-            if e[1] == node_index:
-                return True
-        return False
-    
-    def update(self, node_index, new_value):
+
+    def contains(self, index):
+        return index in self.hash
+        
+    def update(self, index, value):
+        self.hash[index] = value
         for i, e in enumerate(self.heap):
-            if e[1] == node_index:
-                self.heap[i] = new_value
+            if e[1] == index:
+                self.heap[i] = [value, index]
                 break
         self.rebuild()
-    
-    def get(self, node_index):
-        for e in self.heap:
-            if e[1] == node_index:
-                return e
-        return None
+
+    def get(self, index):
+        return self.hash.get(index)
 
 
-def parse_file(data_file):
-	adj_list = []
-	with open(data_file) as f:
-		num_nodes, num_edges, weighted = map(int, f.readline().split())
-		for i in range(num_nodes):
-			adj_list.append(map(int, f.readline().split()))
-	return adj_list
+DIMACS_GRAPH = 1
+SNAP_GRAPH = 2
+CS6140_GRAPH = 3
+
+def parse_file(data_file, graph_format):
+    adj_list = []
+    with open(data_file) as f:
+        if graph_format == DIMACS_GRAPH:
+            lines = f.readlines()
+            for line in lines:
+                keys = line.split()
+                if keys[0] == 'e':
+                    adj_list.append((int(keys[1]), int(keys[2])))
+        elif graph_format == SNAP_GRAPH:
+            lines = f.readlines()
+            for line in lines:
+                keys = line.split()
+                if keys[0] != '#':
+                    adj_list.append((int(keys[0]), int(keys[1])))
+        elif graph_format == CS6140_GRAPH:
+            num_nodes, num_edges, weighted = map(int, f.readline().split())
+            for i in range(num_nodes):
+                adj_list.append(map(int, f.readline().split()))
+        return adj_list
 
 
-def create_graph_from_file(data_file):
-    adj_list = parse_file(data_file)
+def create_graph_from_file(data_file, graph_format=CS6140_GRAPH):
+    adj_list = parse_file(data_file, graph_format)
     G = nx.Graph()
-    for i in range(len(adj_list)):
-        for j in adj_list[i]:
-            G.add_edge(i + 1, j)
+    if graph_format in (DIMACS_GRAPH, SNAP_GRAPH):
+        for a, b in adj_list:
+            G.add_edge(a, b)
+    elif graph_format == CS6140_GRAPH:
+        for i in range(len(adj_list)):
+            for j in adj_list[i]:
+                G.add_edge(i + 1, j)
     return G
 
 
@@ -99,7 +117,7 @@ def minimum_vertex_cover(graph):
 
     while len(edges) > 0:
         # remove node with max degree
-        node_degree, node_index = heap.pop() 
+        node_degree, node_index = heap.pop()
         adj = set(graph.edges([node_index]))
         for u, v in adj:
             # remove edge from list
@@ -108,85 +126,93 @@ def minimum_vertex_cover(graph):
 
             # update neighbors
             if heap.contains(v):
-                new_degree = degrees[v] - 1 
+                new_degree = degrees[v] - 1
                 # update index
                 degrees[v] = new_degree
                 # update heap
-                new_value = [-1 * new_degree, v]
-                heap.update(v, new_value)
+                heap.update(v, -1 * new_degree)
 
         # add node in mvc
         mvc.add(node_index)
-    
+
     return mvc
 
 
 def minimum_vertex_cover_2(graph):
-    heap = Heap()
     mvc = set()
 
-    # data format: [node_degree, node_index]
-    data = []
-    for i in range(graph.number_of_nodes()):
-        # multiply to -1 for desc order
-        data.append([-1*graph.degree[i+1], i+1])
-
-    heap.init(data)
     edges = set(graph.edges)
+    heap, degrees = build_heap(graph)
 
     while len(edges) > 0:
         # remove node with max degree
-        node_degree, node_index = heap.pop() 
+        node_degree, node_index = heap.pop()
         for u, v in graph.edges([node_index]):
             # remove edge from list
             edges.discard((u, v))
             edges.discard((v, u))
         # add node in mvc
         mvc.add(node_index)
-    
+
     return mvc
+
+
+def remove_edges_and_update_degrees(edges_to_remove, edges, degrees, visited):
+    for u, v in edges_to_remove:
+        # remove edge from list
+        edges.discard((u, v))
+        edges.discard((v, u))
+        # update degree
+        degrees[v] -= 1
+        if degrees[v] == 0:
+            visited[v] = True
 
 
 # tip 1: update heap at X loops
 # tip 2: verify if heap implementation is correct
 # tip 3: use heap with dict instead of list
+# verificar se pode se basear no floyd-warshall
 def minimum_vertex_cover_3(graph):
     mvc = set()
     visited = {}
 
     heap, degrees = build_heap(graph)
     edges = set(graph.edges)
+    nodes = set(graph.nodes)
 
-    for node in graph.nodes:
-        visited[node] = False
-    
+    # mark node with degree 1 as visited, otherwise not visited
+    for node in nodes:
+        if degrees[node] == 1:
+            # mark node as visited
+            visited[node] = True
+            # remove edges
+            remove_edges_and_update_degrees(graph.edges([node]), edges, degrees, visited)
+        else:
+            visited[node] = False
+
     while(len(edges) > 0):
         node_degree, node_index = heap.pop()
         if not visited[node_index]:
             visited[node_index] = True
             mvc.add(node_index)
             # remove edges
-            for u, v in graph.edges([node_index]):
-                # remove edge from list
-                edges.discard((u, v))
-                edges.discard((v, u))
-                # update degree
-                degrees[v] -= 1
-                if degrees[v] == 0:
-                    visited[v] = True
+            remove_edges_and_update_degrees(graph.edges([node_index]), edges, degrees, visited)
 
     return mvc
 
 
 def nx_to_jgraph(graph):
-    g = jgrapht.create_graph(directed=False, weighted=True, allowing_self_loops=False, allowing_multiple_edges=False)
+    g = jgrapht.create_graph(directed=False, weighted=True,
+                             allowing_self_loops=False, allowing_multiple_edges=False)
     g.add_vertices_from(list(graph.nodes))
     g.add_edges_from(list(graph.edges))
     return g
 
 
 # build graph
-g = create_graph_from_file('data/star2.graph')
+# g = create_graph_from_file('data/cs6140/dummy5.graph')
+g = create_graph_from_file('data/dimacs/dsjc250.5.col', graph_format=DIMACS_GRAPH)
+# g = create_graph_from_file('data/snap/p2p-Gnutella08.txt', graph_format=SNAP_GRAPH)
 jg = nx_to_jgraph(g)
 
 print(f'No of nodes in graph: {g.number_of_nodes()}')
@@ -195,60 +221,60 @@ print('----')
 
 # calculate mvc
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = minimum_vertex_cover(g)
-end = time()
-print(f'Our minimum vertex cover 1: {len(mvc)}, execution time {end-start}s')
+end = perf_counter()
+print(f'Our minimum vertex cover 1: {len(mvc)}, execution time {end-start:0.5f}s')
 
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = minimum_vertex_cover_2(g)
-end = time()
-print(f'Our minimum vertex cover 2: {len(mvc)}, execution time {end-start}s')
+end = perf_counter()
+print(f'Our minimum vertex cover 2: {len(mvc)}, execution time {end-start:0.5f}s')
 
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = minimum_vertex_cover_3(g)
-end = time()
-print(f'Our minimum vertex cover 3: {len(mvc)}, execution time {end-start}s')
+end = perf_counter()
+print(f'Our minimum vertex cover 3: {len(mvc)}, execution time {end-start:0.5f}s')
 
 print('----')
 
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = min_weighted_vertex_cover(g)
-end = time()
-print(f'NetworkX minimum vertex cover: {len(mvc)}, execution time {end-start}s')
+end = perf_counter()
+print(f'NetworkX minimum vertex cover: {len(mvc)}, execution time {end-start:0.5f}s')
 
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = jgrapht.algorithms.vertexcover.greedy(jg)
-end = time()
-print(f'Jgrapht greedy minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
+end = perf_counter()
+print(f'Jgrapht greedy minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
 
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = jgrapht.algorithms.vertexcover.edgebased(jg)
-end = time()
-print(f'Jgrapht edgebased minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
+end = perf_counter()
+print(f'Jgrapht edgebased minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
 
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = jgrapht.algorithms.vertexcover.clarkson(jg)
-end = time()
-print(f'Jgrapht clarkson minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
+end = perf_counter()
+print(f'Jgrapht clarkson minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
 
 gc.collect()
-start = time()
+start = perf_counter()
 mvc = jgrapht.algorithms.vertexcover.baryehuda_even(jg)
-end = time()
-print(f'Jgrapht baryehuda_even minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
+end = perf_counter()
+print(f'Jgrapht baryehuda_even minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
 
 # gc.collect()
-# start = time()
+# start = perf_counter()
 # mvc = jgrapht.algorithms.vertexcover.exact(jg)
-# end = time()
-# print(f'Jgrapht exact minimum vertex cover: {int(mvc[0])}, execution time {end-start}s')
+# end = perf_counter()
+# print(f'Jgrapht exact minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
 
 # plot
 # plot_graph(g)
