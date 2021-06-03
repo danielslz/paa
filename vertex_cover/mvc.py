@@ -109,7 +109,7 @@ def build_heap(graph):
     return heap, degree_index
 
 
-def minimum_vertex_cover(graph):
+def minimum_vertex_cover_pure_greedy(graph):
     mvc = set()
 
     edges = set(graph.edges)
@@ -138,7 +138,7 @@ def minimum_vertex_cover(graph):
     return mvc
 
 
-def minimum_vertex_cover_2(graph):
+def minimum_vertex_cover_simple_greedy(graph):
     mvc = set()
 
     edges = set(graph.edges)
@@ -168,11 +168,7 @@ def remove_edges_and_update_degrees(edges_to_remove, edges, degrees, visited):
             visited[v] = True
 
 
-# tip 1: update heap at X loops
-# tip 2: verify if heap implementation is correct
-# tip 3: use heap with dict instead of list
-# verificar se pode se basear no floyd-warshall
-def minimum_vertex_cover_3(graph):
+def minimum_vertex_cover_advanced_greedy(graph):
     mvc = set()
     visited = {}
 
@@ -209,72 +205,55 @@ def nx_to_jgraph(graph):
     return g
 
 
+def run(methods, graph, is_jgrapht=False):
+    for func, msg in methods:
+        gc.collect()
+        start = perf_counter()
+        mvc = func(graph)
+        end = perf_counter()
+        if is_jgrapht:
+            # Jgrapht result
+            print(f'{msg} vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
+        else:
+            print(f'{msg} vertex cover: {len(mvc)}, execution time {end-start:0.5f}s')
+
+
 # build graph
 # g = create_graph_from_file('data/cs6140/dummy5.graph')
-g = create_graph_from_file('data/dimacs/dsjc250.5.col', graph_format=DIMACS_GRAPH)
-# g = create_graph_from_file('data/snap/p2p-Gnutella08.txt', graph_format=SNAP_GRAPH)
+g = create_graph_from_file('data/dimacs/dsjc500.5.col', graph_format=DIMACS_GRAPH)
+# g = create_graph_from_file('data/snap/p2p-Gnutella06.txt', graph_format=SNAP_GRAPH)
 jg = nx_to_jgraph(g)
 
-print(f'No of nodes in graph: {g.number_of_nodes()}')
-print(f'No of edges in graph: {g.number_of_edges()}')
+print(f'No of nodes: {g.number_of_nodes()}')
+print(f'No of edges: {g.number_of_edges()}')
 print('----')
 
 # calculate mvc
-gc.collect()
-start = perf_counter()
-mvc = minimum_vertex_cover(g)
-end = perf_counter()
-print(f'Our minimum vertex cover 1: {len(mvc)}, execution time {end-start:0.5f}s')
+our_methods = [
+    (minimum_vertex_cover_pure_greedy, 'Pure greedy'),
+    (minimum_vertex_cover_simple_greedy, 'Simple greedy'),
+    (minimum_vertex_cover_advanced_greedy, 'Advanced greedy')
+]
+run(our_methods, g)
 
-gc.collect()
-start = perf_counter()
-mvc = minimum_vertex_cover_2(g)
-end = perf_counter()
-print(f'Our minimum vertex cover 2: {len(mvc)}, execution time {end-start:0.5f}s')
+print('-----')
 
-gc.collect()
-start = perf_counter()
-mvc = minimum_vertex_cover_3(g)
-end = perf_counter()
-print(f'Our minimum vertex cover 3: {len(mvc)}, execution time {end-start:0.5f}s')
+lib_methods = [
+    (jgrapht.algorithms.vertexcover.greedy, 'Jgrapht greedy'),
+    (jgrapht.algorithms.vertexcover.edgebased, 'Jgrapht edgebased'),
+    (jgrapht.algorithms.vertexcover.clarkson, 'Jgrapht clarkson'),
+    (jgrapht.algorithms.vertexcover.baryehuda_even, 'Jgrapht baryehuda_even'),
+    # (jgrapht.algorithms.vertexcover.exact, 'Jgrapht exact'),
+]
+run(lib_methods, jg, is_jgrapht=True)
 
-print('----')
-
-gc.collect()
-start = perf_counter()
-mvc = min_weighted_vertex_cover(g)
-end = perf_counter()
-print(f'NetworkX minimum vertex cover: {len(mvc)}, execution time {end-start:0.5f}s')
-
-gc.collect()
-start = perf_counter()
-mvc = jgrapht.algorithms.vertexcover.greedy(jg)
-end = perf_counter()
-print(f'Jgrapht greedy minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
-
-gc.collect()
-start = perf_counter()
-mvc = jgrapht.algorithms.vertexcover.edgebased(jg)
-end = perf_counter()
-print(f'Jgrapht edgebased minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
-
-gc.collect()
-start = perf_counter()
-mvc = jgrapht.algorithms.vertexcover.clarkson(jg)
-end = perf_counter()
-print(f'Jgrapht clarkson minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
-
-gc.collect()
-start = perf_counter()
-mvc = jgrapht.algorithms.vertexcover.baryehuda_even(jg)
-end = perf_counter()
-print(f'Jgrapht baryehuda_even minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
 
 # gc.collect()
 # start = perf_counter()
-# mvc = jgrapht.algorithms.vertexcover.exact(jg)
+# mvc = min_weighted_vertex_cover(g)
 # end = perf_counter()
-# print(f'Jgrapht exact minimum vertex cover: {int(mvc[0])}, execution time {end-start:0.5f}s')
+# print(f'NetworkX minimum vertex cover: {len(mvc)}, execution time {end-start:0.5f}s')
+
 
 # plot
 # plot_graph(g)
