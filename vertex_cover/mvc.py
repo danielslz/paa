@@ -4,9 +4,10 @@ import jgrapht
 import matplotlib.pyplot as plt
 import networkx as nx
 
-from heapq import heapify, heappop, _siftup, _siftdown
+from heapq import heapify, heappop
 from networkx.algorithms.approximation.vertex_cover import min_weighted_vertex_cover
 from time import perf_counter
+from networkx.algorithms.assortativity.pairs import node_degree_xy
 
 from networkx.generators.atlas import graph_atlas_g
 
@@ -41,6 +42,9 @@ class Heap():
 
     def get(self, index):
         return self.hash.get(index)
+    
+    def size(self):
+        return len(self.heap)
 
 
 DIMACS_GRAPH = 1
@@ -138,23 +142,47 @@ def minimum_vertex_cover_pure_greedy(graph):
     return mvc
 
 
-def minimum_vertex_cover_simple_greedy(graph):
+def minimum_vertex_cover_approximation(graph):
     mvc = set()
 
     edges = set(graph.edges)
-    heap, degrees = build_heap(graph)
+    nodes = set(graph.nodes)
 
     while len(edges) > 0:
-        # remove node with max degree
-        node_degree, node_index = heap.pop()
-        for u, v in graph.edges([node_index]):
+        # pick any node
+        node = nodes.pop()
+        for u, v in graph.edges([node]):
             # remove edge from list
             edges.discard((u, v))
             edges.discard((v, u))
         # add node in mvc
-        mvc.add(node_index)
+        mvc.add(node)
 
     return mvc
+
+
+def get_degrees(graph):
+    degrees = {}
+
+    for node in graph.nodes:
+        node_index = node
+        degree = graph.degree[node_index]
+        degrees[node_index] = degree
+    
+    return degrees
+
+
+def get_heap(nodes, degrees, visited):
+    heap = Heap()
+    heap_data = []  # data format: [node_degree, node_index]
+    for node in nodes:
+        if not visited[node]:
+            degree = degrees[node]
+            # multiply to -1 for desc order
+            heap_data.append([-1 * degree, node])
+    heap.init(heap_data)
+
+    return heap
 
 
 def remove_edges_and_update_degrees(edges_to_remove, edges, degrees, visited):
@@ -168,26 +196,45 @@ def remove_edges_and_update_degrees(edges_to_remove, edges, degrees, visited):
             visited[v] = True
 
 
-def minimum_vertex_cover_advanced_greedy(graph):
+def minimum_vertex_cover_hybrid_greedy(graph):
     mvc = set()
     visited = {}
 
-    heap, degrees = build_heap(graph)
+    degrees = get_degrees(graph)
     edges = set(graph.edges)
     nodes = set(graph.nodes)
 
-    # mark node with degree 1 as visited, otherwise not visited
+    # mark node with degree 1, otherwise not visited
     for node in nodes:
+        # init status
+        visited[node] = False
         if degrees[node] == 1:
             # mark node as visited
             visited[node] = True
-            # remove edges
+            # remove edges and update node degrees
             remove_edges_and_update_degrees(graph.edges([node]), edges, degrees, visited)
-        else:
-            visited[node] = False
+ 
+    # build heap with nodes not visited
+    heap = get_heap(nodes, degrees, visited)
 
+    # heap update factor
+    heap_update_factor = 1
+    total_nodes = heap.size()
+    # ratio = total_nodes / len(edges)
+    ratio = 0.01
+    if len(nodes) > 100:
+        heap_update_factor = int(total_nodes * ratio)
+
+    # greedy
+    count = 0
     while(len(edges) > 0):
-        node_degree, node_index = heap.pop()
+        count += 1
+        # verify if must update heap
+        if count > heap_update_factor:
+            count = 0
+            heap = get_heap(nodes, degrees, visited)
+
+        _, node_index = heap.pop()
         if not visited[node_index]:
             visited[node_index] = True
             mvc.add(node_index)
@@ -219,9 +266,12 @@ def run(methods, graph, is_jgrapht=False):
 
 
 # build graph
-# g = create_graph_from_file('data/cs6140/dummy5.graph')
-g = create_graph_from_file('data/dimacs/dsjc500.5.col', graph_format=DIMACS_GRAPH)
-# g = create_graph_from_file('data/snap/p2p-Gnutella06.txt', graph_format=SNAP_GRAPH)
+# g = create_graph_from_file('data/cs6140/dummy4.graph')
+# g = create_graph_from_file('data/dimacs/flat1000_76_0.col', graph_format=DIMACS_GRAPH)
+g = create_graph_from_file('data/bhoslib/frb59-26-1.mis', graph_format=DIMACS_GRAPH)
+# g = create_graph_from_file('data/snap/p2p-Gnutella08.txt', graph_format=SNAP_GRAPH)
+
+
 jg = nx_to_jgraph(g)
 
 print(f'No of nodes: {g.number_of_nodes()}')
@@ -230,9 +280,9 @@ print('----')
 
 # calculate mvc
 our_methods = [
-    (minimum_vertex_cover_pure_greedy, 'Pure greedy'),
-    (minimum_vertex_cover_simple_greedy, 'Simple greedy'),
-    (minimum_vertex_cover_advanced_greedy, 'Advanced greedy')
+    (minimum_vertex_cover_approximation, 'Approximation'),
+    # (minimum_vertex_cover_pure_greedy, 'Pure greedy'),
+    (minimum_vertex_cover_hybrid_greedy, 'Hybrid greedy')
 ]
 run(our_methods, g)
 
