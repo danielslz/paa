@@ -3,13 +3,12 @@ import gc
 import jgrapht
 import matplotlib.pyplot as plt
 import networkx as nx
+import os
 
 from heapq import heapify, heappop
 from networkx.algorithms.approximation.vertex_cover import min_weighted_vertex_cover
 from time import perf_counter
-from networkx.algorithms.assortativity.pairs import node_degree_xy
-
-from networkx.generators.atlas import graph_atlas_g
+from os.path import abspath, dirname
 
 
 class Heap():
@@ -50,6 +49,7 @@ class Heap():
 DIMACS_GRAPH = 1
 SNAP_GRAPH = 2
 CS6140_GRAPH = 3
+BHOSLIB_GRAPH = 4
 
 def parse_file(data_file, graph_format):
     adj_list = []
@@ -265,28 +265,47 @@ def run(methods, graph, is_jgrapht=False):
             print(f'{msg} vertex cover: {len(mvc)}, execution time {end-start:0.5f}s')
 
 
-# build graph
-# g = create_graph_from_file('data/cs6140/dummy4.graph')
-# g = create_graph_from_file('data/dimacs/flat1000_76_0.col', graph_format=DIMACS_GRAPH)
-g = create_graph_from_file('data/bhoslib/frb59-26-1.mis', graph_format=DIMACS_GRAPH)
-# g = create_graph_from_file('data/snap/p2p-Gnutella08.txt', graph_format=SNAP_GRAPH)
+def run_tests(own_methods, jgraph_methods, graph_format=CS6140_GRAPH):
+    BASE_DIR = dirname(dirname(abspath(__file__)))
+    src = ''
+    if graph_format == DIMACS_GRAPH:
+        src = BASE_DIR + '/data/dimacs/'
+    elif graph_format == BHOSLIB_GRAPH:
+        src = BASE_DIR + '/data/bhoslib/'
+    elif graph_format == SNAP_GRAPH:
+        src = BASE_DIR + '/data/snap/'
+    elif graph_format == CS6140_GRAPH:
+        src = BASE_DIR + '/data/cs6140/'
+
+    with os.scandir(src) as entries:
+        for entry in entries:
+            if entry.is_file():
+                print(f'Processing {entry.name}')
+                print('-----')
+                # build graph
+                g = create_graph_from_file(src + entry.name, graph_format)
+                # graph info
+                print(f'No of nodes: {g.number_of_nodes()}')
+                print(f'No of edges: {g.number_of_edges()}')
+                print('-----')
+                if own_methods:
+                    run(our_methods, g)
+                print('-----')
+                if jgraph_methods:
+                    # build jgraph
+                    jg = nx_to_jgraph(g)
+                    # run
+                    run(lib_methods, jg, is_jgrapht=True)
+                    print('-----')
 
 
-jg = nx_to_jgraph(g)
+# RUN TESTS
 
-print(f'No of nodes: {g.number_of_nodes()}')
-print(f'No of edges: {g.number_of_edges()}')
-print('----')
-
-# calculate mvc
 our_methods = [
     (minimum_vertex_cover_approximation, 'Approximation'),
     # (minimum_vertex_cover_pure_greedy, 'Pure greedy'),
     (minimum_vertex_cover_hybrid_greedy, 'Hybrid greedy')
 ]
-run(our_methods, g)
-
-print('-----')
 
 lib_methods = [
     (jgrapht.algorithms.vertexcover.greedy, 'Jgrapht greedy'),
@@ -295,8 +314,29 @@ lib_methods = [
     (jgrapht.algorithms.vertexcover.baryehuda_even, 'Jgrapht baryehuda_even'),
     # (jgrapht.algorithms.vertexcover.exact, 'Jgrapht exact'),
 ]
-run(lib_methods, jg, is_jgrapht=True)
 
+run_tests(our_methods, lib_methods, CS6140_GRAPH)
+
+
+# RUN STANDALONE
+
+# build graph
+# g = create_graph_from_file('data/cs6140/dummy4.graph')
+# g = create_graph_from_file('data/dimacs/flat1000_76_0.col', graph_format=DIMACS_GRAPH)
+# g = create_graph_from_file('data/bhoslib/frb59-26-1.mis', graph_format=DIMACS_GRAPH)
+# g = create_graph_from_file('data/snap/p2p-Gnutella08.txt', graph_format=SNAP_GRAPH)
+
+# jg = nx_to_jgraph(g)
+
+# print(f'No of nodes: {g.number_of_nodes()}')
+# print(f'No of edges: {g.number_of_edges()}')
+# print('----')
+
+# calculate mvc
+# run(our_methods, g)
+
+# print('-----')
+# run(lib_methods, jg, is_jgrapht=True)
 
 # gc.collect()
 # start = perf_counter()
