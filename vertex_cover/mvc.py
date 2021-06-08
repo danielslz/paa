@@ -1,10 +1,12 @@
 # pip install networkx matplotlib jgrapht
+import csv
 import gc
 import jgrapht
 import matplotlib.pyplot as plt
 import networkx as nx
 import os
 
+from datetime import datetime
 from heapq import heapify, heappop
 from networkx.algorithms.approximation.vertex_cover import min_weighted_vertex_cover
 from time import perf_counter
@@ -265,17 +267,23 @@ def run(methods, graph, is_jgrapht=False):
             print(f'{msg} vertex cover: {len(mvc)}, execution time {end-start:0.5f}s')
 
 
-def run_tests(own_methods, jgraph_methods, graph_format=CS6140_GRAPH):
+def run_tests(own_methods, jgraph_methods, graph_format=CS6140_GRAPH, write_csv=False):
     BASE_DIR = dirname(dirname(abspath(__file__)))
-    src = ''
+    src = format = ''
+    csv_rows = []
+    
     if graph_format == DIMACS_GRAPH:
         src = BASE_DIR + '/data/dimacs/'
+        format = 'DIMACS'
     elif graph_format == BHOSLIB_GRAPH:
         src = BASE_DIR + '/data/bhoslib/'
+        format = 'BHOSLIB'
     elif graph_format == SNAP_GRAPH:
         src = BASE_DIR + '/data/snap/'
+        format = 'SNAP'
     elif graph_format == CS6140_GRAPH:
         src = BASE_DIR + '/data/cs6140/'
+        format = 'CS6140'
 
     with os.scandir(src) as entries:
         for entry in entries:
@@ -285,25 +293,54 @@ def run_tests(own_methods, jgraph_methods, graph_format=CS6140_GRAPH):
                 # build graph
                 g = create_graph_from_file(src + entry.name, graph_format)
                 # graph info
-                print(f'No of nodes: {g.number_of_nodes()}')
-                print(f'No of edges: {g.number_of_edges()}')
+                num_nodes = g.number_of_nodes()
+                num_edges = g.number_of_edges()
+                print(f'No of nodes: {num_nodes}')
+                print(f'No of edges: {num_edges}')
                 print('-----')
                 if own_methods:
-                    run(our_methods, g)
+                    # run(our_methods, g)
+                    for func, msg in own_methods:
+                        gc.collect()
+                        start = perf_counter()
+                        mvc = func(g)
+                        end = perf_counter()
+                        mvc_size = len(mvc)
+                        mvc_exec_time = end-start
+                        print(f'{msg} vertex cover: {mvc_size}, execution time {mvc_exec_time:0.5f}s')
+                        if write_csv:
+                            csv_rows.append([format, entry.name, num_nodes, num_edges, msg, mvc_size, mvc_exec_time])
                 print('-----')
                 if jgraph_methods:
                     # build jgraph
                     jg = nx_to_jgraph(g)
                     # run
-                    run(lib_methods, jg, is_jgrapht=True)
+                    # run(lib_methods, jg, is_jgrapht=True)
+                    for func, msg in jgraph_methods:
+                        gc.collect()
+                        start = perf_counter()
+                        mvc = func(jg)
+                        end = perf_counter()
+                        mvc_size = int(mvc[0])
+                        mvc_exec_time = end-start
+                        print(f'{msg} vertex cover: {mvc_size}, execution time {mvc_exec_time:0.5f}s')
+                        if write_csv:
+                            csv_rows.append([format, entry.name, num_nodes, num_edges, msg, mvc_size, mvc_exec_time])
                     print('-----')
+    if write_csv:
+        now = datetime.now().strftime("%Y%m%d%H%M%S")
+        dest = f'{BASE_DIR}/output/result_{now}.csv'
+        with open(dest, mode='w') as csv_file:
+            csv_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            csv_writer.writerow(['format', 'file', 'num_nodes', 'num_edges', 'method', 'mvc', 'exec_time'])
+            csv_writer.writerows(csv_rows)
 
 
 # RUN TESTS
 
 our_methods = [
     (minimum_vertex_cover_approximation, 'Approximation'),
-    # (minimum_vertex_cover_pure_greedy, 'Pure greedy'),
+    (minimum_vertex_cover_pure_greedy, 'Greedy'),
     (minimum_vertex_cover_hybrid_greedy, 'Hybrid greedy')
 ]
 
@@ -315,7 +352,7 @@ lib_methods = [
     # (jgrapht.algorithms.vertexcover.exact, 'Jgrapht exact'),
 ]
 
-run_tests(our_methods, lib_methods, CS6140_GRAPH)
+run_tests(our_methods, lib_methods, CS6140_GRAPH, write_csv=True)
 
 
 # RUN STANDALONE
