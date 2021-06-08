@@ -5,6 +5,7 @@ import jgrapht
 import matplotlib.pyplot as plt
 import networkx as nx
 import os
+import sys
 
 from datetime import datetime
 from heapq import heapify, heappop
@@ -56,7 +57,7 @@ BHOSLIB_GRAPH = 4
 def parse_file(data_file, graph_format):
     adj_list = []
     with open(data_file) as f:
-        if graph_format == DIMACS_GRAPH:
+        if graph_format in (DIMACS_GRAPH, BHOSLIB_GRAPH):
             lines = f.readlines()
             for line in lines:
                 keys = line.split()
@@ -78,7 +79,7 @@ def parse_file(data_file, graph_format):
 def create_graph_from_file(data_file, graph_format=CS6140_GRAPH):
     adj_list = parse_file(data_file, graph_format)
     G = nx.Graph()
-    if graph_format in (DIMACS_GRAPH, SNAP_GRAPH):
+    if graph_format in (DIMACS_GRAPH, SNAP_GRAPH, BHOSLIB_GRAPH):
         for a, b in adj_list:
             G.add_edge(a, b)
     elif graph_format == CS6140_GRAPH:
@@ -214,16 +215,26 @@ def minimum_vertex_cover_hybrid_greedy(graph):
             # mark node as visited
             visited[node] = True
             # remove edges and update node degrees
-            remove_edges_and_update_degrees(graph.edges([node]), edges, degrees, visited)
+            # remove_edges_and_update_degrees(graph.edges([node]), edges, degrees, visited)
+            for u, v in graph.edges([node]):
+                if degrees[v] > 1:
+                    # remove edge from list
+                    edges.discard((u, v))
+                    edges.discard((v, u))
+                    # update degree
+                    degrees[v] -= 1
+                    if degrees[v] == 0:
+                        visited[v] = True
+
  
     # build heap with nodes not visited
     heap = get_heap(nodes, degrees, visited)
 
     # heap update factor
-    heap_update_factor = 1
+    heap_update_factor = sys.maxsize
     total_nodes = heap.size()
-    # ratio = total_nodes / len(edges)
-    ratio = 0.01
+    ratio = total_nodes / len(edges)
+    # ratio = 0.01
     if len(nodes) > 100:
         heap_update_factor = int(total_nodes * ratio)
 
@@ -236,12 +247,15 @@ def minimum_vertex_cover_hybrid_greedy(graph):
             count = 0
             heap = get_heap(nodes, degrees, visited)
 
-        _, node_index = heap.pop()
-        if not visited[node_index]:
-            visited[node_index] = True
-            mvc.add(node_index)
-            # remove edges
-            remove_edges_and_update_degrees(graph.edges([node_index]), edges, degrees, visited)
+        try:
+            _, node_index = heap.pop()
+            if not visited[node_index]:
+                visited[node_index] = True
+                mvc.add(node_index)
+                # remove edges
+                remove_edges_and_update_degrees(graph.edges([node_index]), edges, degrees, visited)
+        except IndexError:
+            break
 
     return mvc
 
@@ -339,26 +353,26 @@ def run_tests(own_methods, jgraph_methods, graph_format=CS6140_GRAPH, write_csv=
 # RUN TESTS
 
 our_methods = [
-    (minimum_vertex_cover_approximation, 'Approximation'),
-    (minimum_vertex_cover_pure_greedy, 'Greedy'),
+    # (minimum_vertex_cover_approximation, 'Approximation'),
+    # (minimum_vertex_cover_pure_greedy, 'Tradicional Greedy'),
     (minimum_vertex_cover_hybrid_greedy, 'Hybrid greedy')
 ]
 
 lib_methods = [
     (jgrapht.algorithms.vertexcover.greedy, 'Jgrapht greedy'),
-    (jgrapht.algorithms.vertexcover.edgebased, 'Jgrapht edgebased'),
-    (jgrapht.algorithms.vertexcover.clarkson, 'Jgrapht clarkson'),
-    (jgrapht.algorithms.vertexcover.baryehuda_even, 'Jgrapht baryehuda_even'),
+    # (jgrapht.algorithms.vertexcover.edgebased, 'Jgrapht edgebased'),
+    # (jgrapht.algorithms.vertexcover.clarkson, 'Jgrapht clarkson'),
+    # (jgrapht.algorithms.vertexcover.baryehuda_even, 'Jgrapht baryehuda_even'),
     # (jgrapht.algorithms.vertexcover.exact, 'Jgrapht exact'),
 ]
 
-run_tests(our_methods, lib_methods, CS6140_GRAPH, write_csv=True)
+run_tests(our_methods, lib_methods, BHOSLIB_GRAPH, write_csv=True)
 
 
 # RUN STANDALONE
 
 # build graph
-# g = create_graph_from_file('data/cs6140/dummy4.graph')
+# g = create_graph_from_file('data/cs6140/dummy5.graph')
 # g = create_graph_from_file('data/dimacs/flat1000_76_0.col', graph_format=DIMACS_GRAPH)
 # g = create_graph_from_file('data/bhoslib/frb59-26-1.mis', graph_format=DIMACS_GRAPH)
 # g = create_graph_from_file('data/snap/p2p-Gnutella08.txt', graph_format=SNAP_GRAPH)
